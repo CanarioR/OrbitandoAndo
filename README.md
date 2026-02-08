@@ -6,7 +6,7 @@ Guía un satélite entre planetas usando la gravedad. Toca la pantalla para solt
 
 ## 🕹️ Jugar
 
-👉 **[¡Jugar ahora!]([https://tu-usuario.github.io/miniGameSatelite/](https://canarior.github.io/OrbitandoAndo/))** — funciona en móvil y escritorio.
+👉 **[¡Jugar ahora!](https://canarior.github.io/OrbitandoAndo/)** — funciona en móvil y escritorio.
 
 ## 🎮 Cómo jugar
 
