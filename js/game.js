@@ -10,7 +10,8 @@ const PARTICLE_COUNT_DEATH   = 20;
 // --- State machine ---
 const STATE = {
     WAITING: -2, INTRO: -1, START: 0,
-    PLAYING: 1, GAMEOVER: 2, TRANSITION: 3
+    PLAYING: 1, GAMEOVER: 2, TRANSITION: 3,
+    NAMEINPUT: 4
 };
 
 let gameState      = STATE.WAITING;
@@ -187,11 +188,14 @@ function drawIntro() {
 
     if (introPhase >= 3) {
         const cx = LOGIC_W / 2;
-        if (Math.sin(Date.now() * 0.004) > 0) {
-            pxText("[TOCA PARA JUGAR]", cx, fl(LOGIC_H * 0.88), COL.LIGHT, 1, "center");
+        if (getPlayerName()) {
+            pxText(getPlayerName(), cx, fl(LOGIC_H * 0.76), COL.MINT, 1, "center");
         }
         if (highScore > 0) {
             pxText("RECORD " + highScore, cx, fl(LOGIC_H * 0.82), COL.TEAL, 1, "center");
+        }
+        if (Math.sin(Date.now() * 0.004) > 0) {
+            pxText("[TOCA PARA JUGAR]", cx, fl(LOGIC_H * 0.88), COL.LIGHT, 1, "center");
         }
     }
     ctx.restore();
@@ -236,6 +240,7 @@ function initGameFromIntro() {
     shakeTimer = 0;
 
     const first = createPlanet(fl(introPlanetX), fl(introPlanetY), introPlanetR, COL.TEAL);
+    first.visited = true;
     planets.push(first);
     satellite.currentPlanet = first;
     satellite.orbitRadius   = first.radius * ORBIT_RADIUS_RATIO;
@@ -259,6 +264,7 @@ function initGame() {
     shakeTimer = 0;
 
     const first = createPlanet(fl(LOGIC_W / 2), fl(LOGIC_H * 0.7), 14, COL.TEAL);
+    first.visited = true;
     planets.push(first);
     satellite.currentPlanet = first;
     satellite.orbitRadius   = first.radius * ORBIT_RADIUS_RATIO;
@@ -299,6 +305,7 @@ function capture(planet) {
     satellite.currentPlanet = planet;
     satellite.orbitRadius   = planet.radius * ORBIT_RADIUS_RATIO;
     satellite.angle = Math.atan2(satellite.y - planet.y, satellite.x - planet.x);
+    planet.visited = true;
     score++;
     if (score > highScore) {
         highScore = score;
@@ -321,12 +328,105 @@ function die() {
     playSFX(SFX.explosion);
     stopBGMusic();
     playSFX(SFX.gameOver);
+
+    // Auto-guardar puntaje en Supabase
+    if (score > 0 && getPlayerName()) {
+        saveScore(getPlayerName(), score);
+    }
+    // Refrescar leaderboard
+    fetchLeaderboard();
+}
+
+// --- Name input state ---
+let nameBuffer = "";
+let nameCursorBlink = 0;
+const NAME_MAX_LEN = 10;
+const NAME_VALID = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+function initNameInput() {
+    nameBuffer = getPlayerName();
+    nameCursorBlink = 0;
+}
+
+function updateNameInput(dt) {
+    nameCursorBlink += dt * 0.06;
+}
+
+function drawNameInput() {
+    ctx.fillStyle = COL.DARK;
+    ctx.fillRect(0, 0, LOGIC_W, LOGIC_H);
+    drawStars(0);
+
+    const cx = LOGIC_W / 2;
+
+    // Título
+    pxText("TU NOMBRE", cx, fl(LOGIC_H * 0.18), COL.BRIGHT, 2, "center");
+    ctx.fillStyle = COL.TEAL;
+    ctx.fillRect(cx - 30, fl(LOGIC_H * 0.18) + 13, 60, 1);
+
+    // Campo de texto
+    const fieldY = fl(LOGIC_H * 0.38);
+    const fieldW = 74;
+    const fieldH = 12;
+    const fieldX = cx - fl(fieldW / 2);
+
+    // Borde
+    ctx.fillStyle = COL.OCEAN;
+    ctx.fillRect(fieldX - 1, fieldY - 1, fieldW + 2, 1);
+    ctx.fillRect(fieldX - 1, fieldY + fieldH, fieldW + 2, 1);
+    ctx.fillRect(fieldX - 1, fieldY, 1, fieldH);
+    ctx.fillRect(fieldX + fieldW, fieldY, 1, fieldH);
+
+    // Fondo
+    ctx.fillStyle = COL.DARK2;
+    ctx.fillRect(fieldX, fieldY, fieldW, fieldH);
+
+    // Texto del nombre
+    const display = nameBuffer + (Math.sin(nameCursorBlink) > 0 ? "_" : " ");
+    pxText(display, cx, fieldY + 3, COL.BRIGHT, 1, "center");
+
+    // Instrucciones
+    pxText("ESCRIBE TU NOMBRE", cx, fl(LOGIC_H * 0.54), COL.MID, 1, "center");
+    pxText("TOCA PARA ESCRIBIR", cx, fl(LOGIC_H * 0.54) + 8, COL.OCEAN, 1, "center");
+
+    // Botón
+    if (nameBuffer.length > 0 && Math.sin(Date.now() * 0.004) > 0) {
+        pxText("[ENTER PARA JUGAR]", cx, fl(LOGIC_H * 0.72), COL.LIGHT, 1, "center");
+    }
+
+    if (nameBuffer.length === 0) {
+        pxText("MIN 1 LETRA", cx, fl(LOGIC_H * 0.72), COL.DEEP, 1, "center");
+    }
+
+    pxText("CANARIO", cx, fl(LOGIC_H * 0.88), COL.AQUA, 1, "center");
+}
+
+function handleNameKey(e) {
+    if (gameState !== STATE.NAMEINPUT) return;
+    e.preventDefault();
+    initAudioContext(); // desbloquear audio en el primer gesto
+    const key = e.key.toUpperCase();
+
+    if (key === "ENTER" && nameBuffer.length > 0) {
+        setPlayerName(nameBuffer);
+        fetchPersonalHistory(getPlayerName());
+        gameState = STATE.WAITING;
+        return;
+    }
+    if (key === "BACKSPACE") {
+        nameBuffer = nameBuffer.slice(0, -1);
+        return;
+    }
+    if (key.length === 1 && NAME_VALID.includes(key) && nameBuffer.length < NAME_MAX_LEN) {
+        nameBuffer += key;
+    }
 }
 
 // --- Input ---
 let inputLock = false;
 
 function handleInput() {
+    if (gameState === STATE.NAMEINPUT) return; // se maneja con handleNameKey
     if (gameState === STATE.WAITING) {
         initAudioContext();
         gameState = STATE.INTRO;
@@ -339,20 +439,93 @@ function handleInput() {
         return;
     }
     if (gameState === STATE.START) { gameState = STATE.PLAYING; initGame(); return; }
-    if (gameState === STATE.GAMEOVER) { gameState = STATE.INTRO; shakeTimer = 0; initIntro(); return; }
+    if (gameState === STATE.GAMEOVER) {
+        if (showLeaderboard) {
+            showLeaderboard = false; // volver a la vista de puntaje
+            return;
+        }
+        gameState = STATE.INTRO; shakeTimer = 0; showLeaderboard = false; initIntro(); return;
+    }
     if (gameState === STATE.PLAYING) launch();
 }
 
 window.addEventListener("keydown", function(e) {
+    // Name input se maneja aparte
+    if (gameState === STATE.NAMEINPUT) {
+        handleNameKey(e);
+        return;
+    }
     if (e.code === "Space" || e.code === "Enter") {
         e.preventDefault();
         if (!inputLock) { inputLock = true; handleInput(); }
+    }
+    // Toggle leaderboard con "L" en game over
+    if (e.code === "KeyL" && gameState === STATE.GAMEOVER) {
+        showLeaderboard = !showLeaderboard;
     }
 });
 window.addEventListener("keyup", function(e) {
     if (e.code === "Space" || e.code === "Enter") inputLock = false;
 });
-canvas.addEventListener("pointerdown", function(e) { e.preventDefault(); handleInput(); });
+
+// Coordenadas lógicas del pointer
+function getLogicPointer(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = LOGIC_W / rect.width;
+    const scaleY = LOGIC_H / rect.height;
+    return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+    };
+}
+
+// --- Mobile keyboard support ---
+const mobileInput = document.getElementById("mobileNameInput");
+
+function focusMobileInput() {
+    mobileInput.value = nameBuffer;
+    mobileInput.focus();
+}
+
+mobileInput.addEventListener("input", function() {
+    if (gameState !== STATE.NAMEINPUT) return;
+    let val = mobileInput.value.toUpperCase();
+    val = val.split("").filter(function(c) { return NAME_VALID.includes(c); }).join("");
+    nameBuffer = val.substring(0, NAME_MAX_LEN);
+    mobileInput.value = nameBuffer;
+});
+
+mobileInput.addEventListener("keydown", function(e) {
+    if (gameState !== STATE.NAMEINPUT) return;
+    if (e.key === "Enter") {
+        e.preventDefault();
+        if (nameBuffer.length > 0) {
+            setPlayerName(nameBuffer);
+            fetchPersonalHistory(getPlayerName());
+            mobileInput.blur();
+            gameState = STATE.WAITING;
+        }
+    }
+});
+
+canvas.addEventListener("pointerdown", function(e) {
+    e.preventDefault();
+    initAudioContext(); // desbloquear audio en cualquier toque
+    if (gameState === STATE.NAMEINPUT) {
+        focusMobileInput();
+        return;
+    }
+    if (gameState === STATE.GAMEOVER) {
+        const p = getLogicPointer(e);
+        // Zona del botón "[VER RANKING]" / "[VOLVER]" (centrado, ~68% de alto)
+        const btnY = showLeaderboard ? fl(LOGIC_H * 0.78) : fl(LOGIC_H * 0.68);
+        if (p.y >= btnY - 4 && p.y <= btnY + 8) {
+            showLeaderboard = !showLeaderboard;
+            return;
+        }
+    }
+    handleInput();
+});
 
 // --- Camera ---
 function updateCamera() {
@@ -365,6 +538,7 @@ function update(dt) {
     if (shakeTimer > 0) shakeTimer -= dt * 0.05;
     if (shakeTimer < 0) shakeTimer = 0;
 
+    if (gameState === STATE.NAMEINPUT) { updateNameInput(dt); return; }
     if (gameState === STATE.WAITING) return;
     if (gameState === STATE.INTRO) { updateIntro(dt); return; }
     if (gameState === STATE.TRANSITION) { updateTransition(dt); return; }
@@ -383,7 +557,7 @@ function update(dt) {
                 satellite.vx += ((p.x - satellite.x) / d) * f;
                 satellite.vy += ((p.y - satellite.y) / d) * f;
             }
-            if (d < capR && p !== satellite.currentPlanet) { capture(p); break; }
+            if (d < capR && p !== satellite.currentPlanet && !p.visited) { capture(p); break; }
             if (d < p.radius * 0.6) { die(); return; }
         }
         satellite.x += satellite.vx * dt;
@@ -425,6 +599,8 @@ function draw() {
         pxText("CANARIO", cx, fl(LOGIC_H * 0.88), COL.AQUA, 1, "center");
         return;
     }
+
+    if (gameState === STATE.NAMEINPUT) { drawNameInput(); return; }
 
     if (gameState === STATE.INTRO) { drawIntro(); return; }
 
@@ -508,6 +684,9 @@ function drawStartScreen() {
     pxText("V1.0", cx, LOGIC_H - 10, COL.DEEP, 1, "center");
 }
 
+// --- Leaderboard tab state ---
+let showLeaderboard = false;
+
 function drawGameOverScreen() {
     ctx.fillStyle = COL.DARK;
     for (let y = 0; y < LOGIC_H; y++)
@@ -515,19 +694,70 @@ function drawGameOverScreen() {
             ctx.fillRect(x, y, 1, 1);
 
     const cx = LOGIC_W / 2;
-    const ty = fl(LOGIC_H * 0.22);
+
+    if (showLeaderboard) {
+        drawLeaderboardView(cx);
+    } else {
+        drawScoreView(cx);
+    }
+}
+
+function drawScoreView(cx) {
+    const ty = fl(LOGIC_H * 0.15);
     pxText("PERDIDO EN", cx, ty, COL.MID, 2, "center");
     pxText("EL ESPACIO", cx, ty + 14, COL.MID, 2, "center");
     ctx.fillStyle = COL.OCEAN;
     ctx.fillRect(cx - 25, ty + 28, 50, 1);
-    pxText(score + "", cx, fl(LOGIC_H * 0.44), COL.BRIGHT, 3, "center");
-    pxText("PLANETAS RECORRIDOS", cx, fl(LOGIC_H * 0.44) + 20, COL.TEAL, 1, "center");
+    pxText(score + "", cx, fl(LOGIC_H * 0.37), COL.BRIGHT, 3, "center");
+    pxText("PLANETAS RECORRIDOS", cx, fl(LOGIC_H * 0.37) + 20, COL.TEAL, 1, "center");
 
     if (score >= highScore && score > 0)
-        pxText("NUEVO RECORD!", cx, fl(LOGIC_H * 0.58), COL.MINT, 1, "center");
+        pxText("NUEVO RECORD!", cx, fl(LOGIC_H * 0.50), COL.MINT, 1, "center");
     else
-        pxText("RECORD " + highScore, cx, fl(LOGIC_H * 0.58), COL.AQUA, 1, "center");
+        pxText("RECORD " + highScore, cx, fl(LOGIC_H * 0.50), COL.AQUA, 1, "center");
+
+    if (getPlayerName()) {
+        pxText(getPlayerName(), cx, fl(LOGIC_H * 0.56), COL.OCEAN, 1, "center");
+    }
+
+    // Botón para ver leaderboard
+    pxText("[VER RANKING]", cx, fl(LOGIC_H * 0.68), COL.AQUA, 1, "center");
 
     if (Math.sin(Date.now() * 0.004) > 0)
-        pxText("[TOCA PARA REINTENTAR]", cx, fl(LOGIC_H * 0.74), COL.LIGHT, 1, "center");
+        pxText("[TOCA PARA REINTENTAR]", cx, fl(LOGIC_H * 0.78), COL.LIGHT, 1, "center");
+}
+
+function drawLeaderboardView(cx) {
+    const ty = fl(LOGIC_H * 0.06);
+    pxText("RANKING GLOBAL", cx, ty, COL.BRIGHT, 2, "center");
+    ctx.fillStyle = COL.OCEAN;
+    ctx.fillRect(cx - 35, ty + 12, 70, 1);
+
+    const startY = ty + 20;
+    if (leaderboardLoading) {
+        pxText("CARGANDO...", cx, startY + 30, COL.MID, 1, "center");
+    } else if (leaderboardData.length === 0) {
+        pxText("SIN DATOS AUN", cx, startY + 30, COL.MID, 1, "center");
+    } else {
+        for (let i = 0; i < leaderboardData.length; i++) {
+            const entry = leaderboardData[i];
+            const ey = startY + i * 10;
+            const rank = (i + 1) + ".";
+            const name = entry.player_name.substring(0, 8);
+            const sc = entry.score + "";
+
+            const isMe = entry.player_name === getPlayerName();
+            const nameCol = isMe ? COL.MINT : COL.LIGHT;
+            const scoreCol = isMe ? COL.BRIGHT : COL.AQUA;
+
+            pxText(rank, 10, ey, COL.OCEAN, 1, "left");
+            pxText(name, 24, ey, nameCol, 1, "left");
+            pxText(sc, LOGIC_W - 10, ey, scoreCol, 1, "right");
+        }
+    }
+
+    pxText("[VOLVER]", cx, fl(LOGIC_H * 0.78), COL.AQUA, 1, "center");
+
+    if (Math.sin(Date.now() * 0.004) > 0)
+        pxText("[TOCA PARA REINTENTAR]", cx, fl(LOGIC_H * 0.88), COL.LIGHT, 1, "center");
 }

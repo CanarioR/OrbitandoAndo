@@ -21,3 +21,14 @@ canvas {
     image-rendering: pixelated;
     image-rendering: crisp-edges;
 }
+
+#mobileNameInput {
+    position: fixed;
+    top: -100px;
+    left: -100px;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    border: none;
+    outline: none;
+}

@@ -11,6 +11,16 @@ function loop(ts) {
     requestAnimationFrame(loop);
 }
 
+// --- Init Supabase ---
+initSupabase();
+fetchLeaderboard();
+
+// Si no tiene nombre guardado, mostrar pantalla de nombre
+if (!getPlayerName()) {
+    gameState = STATE.NAMEINPUT;
+    initNameInput();
+}
+
 createStars();
 requestAnimationFrame(function first(ts) {
     lastTime = ts;
