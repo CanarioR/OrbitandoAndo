@@ -329,12 +329,14 @@ function die() {
     stopBGMusic();
     playSFX(SFX.gameOver);
 
-    // Auto-guardar puntaje en Supabase
+    // Auto-guardar puntaje en Supabase y luego refrescar leaderboard
     if (score > 0 && getPlayerName()) {
-        saveScore(getPlayerName(), score);
+        saveScore(getPlayerName(), score).then(function() {
+            fetchLeaderboard();
+        });
+    } else {
+        fetchLeaderboard();
     }
-    // Refrescar leaderboard
-    fetchLeaderboard();
 }
 
 // --- Name input state ---

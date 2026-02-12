@@ -40,10 +40,11 @@ async function saveScore(name, scoreVal) {
         // Solo guardar si es nuevo récord
         if (existing && existing.score >= scoreVal) return;
 
+        // Upsert: inserta si no existe, actualiza si ya existe
         await supabaseClient
             .from("scores")
             .upsert(
-                { player_name: name, score: scoreVal, created_at: new Date().toISOString() },
+                { player_name: name, score: scoreVal },
                 { onConflict: "player_name" }
             );
     } catch (e) {
