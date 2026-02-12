@@ -25,14 +25,27 @@ function getPlayerName() {
     return playerName;
 }
 
-// --- Guardar puntaje ---
+// --- Guardar puntaje (solo si es mayor al existente) ---
 async function saveScore(name, scoreVal) {
     if (!supabaseClient) return;
     if (!name || scoreVal <= 0) return;
     try {
+        // Consultar puntaje actual del jugador
+        const { data: existing } = await supabaseClient
+            .from("scores")
+            .select("score")
+            .eq("player_name", name)
+            .single();
+
+        // Solo guardar si es nuevo récord
+        if (existing && existing.score >= scoreVal) return;
+
         await supabaseClient
             .from("scores")
-            .insert({ player_name: name, score: scoreVal });
+            .upsert(
+                { player_name: name, score: scoreVal, created_at: new Date().toISOString() },
+                { onConflict: "player_name" }
+            );
     } catch (e) {
         console.error("Error guardando puntaje:", e);
     }

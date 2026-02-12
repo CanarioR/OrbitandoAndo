@@ -52,4 +52,3 @@ miniGameSatelite/
 ## 👤 Autor
 
 **Canario**
-
